@@ -1,15 +1,15 @@
 {
-  "name": "homebridge-script2",
+  "name": "homebridge-script2-denko",
   "version": "0.2.7",
   "license": "MIT",
-  "description": "script plugin for homebridge: https://github.com/nfarina/homebridge",
+  "description": "script plugin for homebridge: https://github.com/denkomanceski/homebridge",
   "keywords": [
     "homebridge-plugin",
     "homebridge-script2"
   ],
   "repository": {
     "type": "git",
-    "url": "git://github.com/pponce/homebridge-script2.git"
+    "url": "git://github.com/denkomanceski/homebridge-script2.git"
   },
   "engines": {
     "homebridge": ">=0.2.0",

@@ -10,7 +10,7 @@ var sys = require('sys');
 module.exports = function(homebridge) {
   Service = homebridge.hap.Service;
   Characteristic = homebridge.hap.Characteristic;
-  homebridge.registerAccessory('homebridge-script2', 'Script2', script2Accessory);
+  homebridge.registerAccessory('homebridge-script2', 'Script2denko', script2Accessory);
 }
 
 function puts(error, stdout, stderr) {
@@ -27,13 +27,14 @@ function script2Accessory(log, config) {
   this.stateCommand = config['state'] || false;
   this.onValue = config['on_value'] || "true";
   this.fileState = config['fileState'] || false;
+  this.accessoryType = config['accessoryType'] || false;
   if (!this.fileState) {
     this.onValue = this.onValue.trim().toLowerCase();
   }
   //this.exactMatch = config['exact_match'] || true;
 }
 
-/* 
+/*
   script2Accessory.prototype.matchesString = function(match) {
   if(this.exactMatch) {
     return (match === this.onValue);
@@ -59,8 +60,8 @@ script2Accessory.prototype.setState = function(powerOn, callback) {
 script2Accessory.prototype.getState = function(callback) {
   var accessory = this;
   var command = accessory['stateCommand'];
-  var stdout = "none";  
-  
+  var stdout = "none";
+
   if (this.fileState) {
     var flagFile = fileExists.sync(this.fileState);
     accessory.log('State of ' + accessory.name + ' is: ' + flagFile);
@@ -80,7 +81,7 @@ script2Accessory.prototype.getState = function(callback) {
 
 script2Accessory.prototype.getServices = function() {
   var informationService = new Service.AccessoryInformation();
-  var switchService = new Service.Switch(this.name);
+  var switchService = !this.accessoryType ? new Service.Switch(this.name) : new Service.GarageDoorOpener(this.name);
 
   informationService
   .setCharacteristic(Characteristic.Manufacturer, 'script2 Manufacturer')
@@ -93,7 +94,7 @@ script2Accessory.prototype.getServices = function() {
   if (this.stateCommand || this.fileState) {
     characteristic.on('get', this.getState.bind(this))
   };
-  
+
   if (this.fileState) {
     var fileCreatedHandler = function(path, stats){
       if (!this.currentState) {
@@ -101,14 +102,14 @@ script2Accessory.prototype.getServices = function() {
 	      switchService.setCharacteristic(Characteristic.On, true);
       }
     }.bind(this);
-  
+
     var fileRemovedHandler = function(path, stats){
       if (this.currentState) {
           this.log('File ' + path + ' was deleted');
 	      switchService.setCharacteristic(Characteristic.On, false);
 	  }
     }.bind(this);
-  
+
     var watcher = chokidar.watch(this.fileState, {alwaysStat: true});
     watcher.on('add', fileCreatedHandler);
     watcher.on('unlink', fileRemovedHandler);
