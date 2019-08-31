@@ -1,118 +1,98 @@
-var Service;
-var Characteristic;
+'use strict';
 
-var sys = require('sys');
-    exec = require('child_process').exec;
-    assign = require('object-assign');
-    fileExists = require('file-exists');
-    chokidar = require('chokidar');
 
-module.exports = function(homebridge) {
+
+var Service, Characteristic;
+var exec = require('child_process').exec;
+module.exports = (homebridge) => {
   Service = homebridge.hap.Service;
   Characteristic = homebridge.hap.Characteristic;
-  homebridge.registerAccessory('homebridge-script2', 'Script2denko', script2Accessory);
-}
 
-function puts(error, stdout, stderr) {
-   console.log(stdout)
-}
+  homebridge.registerAccessory('homebridge-controls-garage-door-opener', 'ControlsGarageDoorOpener', ControlsGarageDoorOpener);
+};
 
-function script2Accessory(log, config) {
-  this.log = log;
-  this.service = 'Switch';
+class ControlsGarageDoorOpener {
+  constructor (log, config) {
 
-  this.name = config['name'];
-  this.onCommand = config['on'];
-  this.offCommand = config['off'];
-  this.stateCommand = config['state'] || false;
-  this.onValue = config['on_value'] || "true";
-  this.fileState = config['fileState'] || false;
-  this.accessoryType = config['accessoryType'] || false;
-  if (!this.fileState) {
-    this.onValue = this.onValue.trim().toLowerCase();
+    //get config values
+    this.name = config['name'];
+    this.simulateTimeOpening = config['simulateTimeOpening'] || 15;
+    this.simulateTimeOpen = config['simulateTimeOpen'] || 30;
+    this.simulateTimeClosing = config['simulateTimeClosing'] || 15;
+    this.closeAfter = 5;
+    this.onCommand = config('on');
+
+    //initial setup
+    this.log = log;
+    this.lastOpened = new Date();
+    this.service = new Service.GarageDoorOpener(this.name, this.name);
+    this.setupGarageDoorOpenerService(this.service);
+
+    this.informationService = new Service.AccessoryInformation();
+    this.informationService
+    .setCharacteristic(Characteristic.Manufacturer, 'Simple Garage Door')
+    .setCharacteristic(Characteristic.Model, 'A Remote Control')
+    .setCharacteristic(Characteristic.SerialNumber, '0711');
   }
-  //this.exactMatch = config['exact_match'] || true;
-}
 
-/*
-  script2Accessory.prototype.matchesString = function(match) {
-  if(this.exactMatch) {
-    return (match === this.onValue);
+  getServices () {
+    return [this.informationService, this.service];
   }
-  else {
-    return (match.indexOf(this.onValue) > -1);
-  }
-}
-*/
 
-script2Accessory.prototype.setState = function(powerOn, callback) {
-  var accessory = this;
-  var state = powerOn ? 'on' : 'off';
-  var prop = state + 'Command';
-  var command = accessory[prop];
+  setupGarageDoorOpenerService (service) {
 
-    exec(command, puts);
-    accessory.log('Set ' + accessory.name + ' to ' + state);
-    accessory.currentState = powerOn;
-    callback(null);
-}
+    this.service.setCharacteristic(Characteristic.TargetDoorState, Characteristic.TargetDoorState.CLOSED);
+    this.service.setCharacteristic(Characteristic.CurrentDoorState, Characteristic.CurrentDoorState.CLOSED);
 
-script2Accessory.prototype.getState = function(callback) {
-  var accessory = this;
-  var command = accessory['stateCommand'];
-  var stdout = "none";
-
-  if (this.fileState) {
-    var flagFile = fileExists.sync(this.fileState);
-    accessory.log('State of ' + accessory.name + ' is: ' + flagFile);
-    callback(null, flagFile);
-  }
-  else if (this.stateCommand) {
-    exec(command, function (error, stdout, stderr) {
-      var cleanOut=stdout.trim().toLowerCase();
-      accessory.log('State of ' + accessory.name + ' is: ' + cleanOut);
-      callback(null, cleanOut == accessory.onValue);
+    service.getCharacteristic(Characteristic.TargetDoorState)
+    .on('get', (callback) => {
+      var targetDoorState = service.getCharacteristic(Characteristic.TargetDoorState).value;
+      if (targetDoorState === Characteristic.TargetDoorState.OPEN && ((new Date() - this.lastOpened) >= (this.closeAfter * 1000))) {
+        this.log('Setting TargetDoorState -> CLOSED');
+        callback(null, Characteristic.TargetDoorState.CLOSED);
+      } else {
+        callback(null, targetDoorState);
+      }
+    })
+    .on('set', (value, callback) => {
+      if (value === Characteristic.TargetDoorState.OPEN) {
+        this.lastOpened = new Date();
+        switch (service.getCharacteristic(Characteristic.CurrentDoorState).value) {
+          case Characteristic.CurrentDoorState.CLOSED:
+          case Characteristic.CurrentDoorState.CLOSING:
+          case Characteristic.CurrentDoorState.OPEN:
+            this.openGarageDoor(callback, this.onCommand);
+            break;
+          default:
+            callback();
+        }
+      } else {
+        callback();
+      }
     });
   }
-  else {
-      accessory.log('Must set config value for fileState or state.');
+
+  openGarageDoor (callback, onCommand) {
+
+
+    exec(onCommand);
+
+    this.log('Opening the garage door for...');
+    this.simulateGarageDoorOpening();
+    callback();
   }
-}
 
-script2Accessory.prototype.getServices = function() {
-  var informationService = new Service.AccessoryInformation();
-  var switchService = !this.accessoryType ? new Service.Switch(this.name) : new Service.GarageDoorOpener(this.name);
-
-  informationService
-  .setCharacteristic(Characteristic.Manufacturer, 'script2 Manufacturer')
-  .setCharacteristic(Characteristic.Model, 'script2 Model')
-  .setCharacteristic(Characteristic.SerialNumber, 'script2 Serial Number');
-
-  var characteristic = switchService.getCharacteristic(Characteristic.On)
-  .on('set', this.setState.bind(this));
-
-  if (this.stateCommand || this.fileState) {
-    characteristic.on('get', this.getState.bind(this))
-  };
-
-  if (this.fileState) {
-    var fileCreatedHandler = function(path, stats){
-      if (!this.currentState) {
-          this.log('File ' + path + ' was created');
-	      switchService.setCharacteristic(Characteristic.On, true);
-      }
-    }.bind(this);
-
-    var fileRemovedHandler = function(path, stats){
-      if (this.currentState) {
-          this.log('File ' + path + ' was deleted');
-	      switchService.setCharacteristic(Characteristic.On, false);
-	  }
-    }.bind(this);
-
-    var watcher = chokidar.watch(this.fileState, {alwaysStat: true});
-    watcher.on('add', fileCreatedHandler);
-    watcher.on('unlink', fileRemovedHandler);
+  simulateGarageDoorOpening () {
+    this.service.setCharacteristic(Characteristic.CurrentDoorState, Characteristic.CurrentDoorState.OPENING);
+    setTimeout(() => {
+      this.service.setCharacteristic(Characteristic.CurrentDoorState, Characteristic.CurrentDoorState.OPEN);
+      setTimeout(() => {
+        this.service.setCharacteristic(Characteristic.CurrentDoorState, Characteristic.CurrentDoorState.CLOSING);
+        this.service.setCharacteristic(Characteristic.TargetDoorState, Characteristic.TargetDoorState.CLOSED);
+        setTimeout(() => {
+          this.service.setCharacteristic(Characteristic.CurrentDoorState, Characteristic.CurrentDoorState.CLOSED);
+        }, this.simulateTimeClosing * 1000);
+      }, this.simulateTimeOpen * 1000);
+    }, this.simulateTimeOpening * 1000);
   }
-  return [switchService];
 }

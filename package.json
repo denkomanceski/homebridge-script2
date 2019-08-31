@@ -1,5 +1,5 @@
 {
-  "name": "homebridge-script2-denko",
+  "name": "homebridge-door-opener",
   "version": "0.2.8",
   "license": "MIT",
   "description": "script plugin for homebridge: https://github.com/denkomanceski/homebridge",
