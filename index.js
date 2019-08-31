@@ -20,7 +20,7 @@ class ControlsGarageDoorOpener {
     this.simulateTimeOpen = config['simulateTimeOpen'] || 30;
     this.simulateTimeClosing = config['simulateTimeClosing'] || 15;
     this.closeAfter = 5;
-    this.onCommand = config('on');
+    this.onCommand = config['on'];
 
     //initial setup
     this.log = log;
