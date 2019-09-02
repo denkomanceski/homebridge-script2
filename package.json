@@ -1,6 +1,6 @@
 {
-  "name": "homebridge-door-opener",
-  "version": "0.2.9",
+  "name": "homebridge-home-door-opener",
+  "version": "0.4.4",
   "license": "MIT",
   "description": "script plugin for homebridge: https://github.com/denkomanceski/homebridge",
   "keywords": [
